@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cross-Canvas Drag and Drop with Canvas Only</title>
+  <style>
+    canvas {
+      border: 2px solid #333;
+      display: block;
+      margin: 10px auto;
+      background-color: #f8f8f8;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="loginCanvas" width="500" height="400"></canvas>
+<canvas id="dropCanvas" width="500" height="200"></canvas>
+
+<script>
+const loginCanvas = document.getElementById('loginCanvas');
+const ctx1 = loginCanvas.getContext('2d');
+
+const dropCanvas = document.getElementById('dropCanvas');
+const ctx2 = dropCanvas.getContext('2d');
+
+let username = "", password = "", loginMessage = "";
+let activeField = null;
+
+const dragElements = [
+  {x: 380, y: 50, width: 80, height: 40, color: 'green', name: 'green', canvas: 'login'},
+  {x: 380, y: 120, width: 80, height: 40, color: 'yellow', name: 'yellow', canvas: 'login'}
+];
+
+const dropZones = [
+  {x: 50, y: 50, width: 100, height: 60, label: 'Green', accepts: 'green'},
+  {x: 200, y: 50, width: 100, height: 60, label: 'Yellow', accepts: 'yellow'}
+];
+
+let draggingElement = null, offsetX = 0, offsetY = 0, dragging = false;
+let dropMessage = "";
+
+// Login Canvas Drawing
+function drawLoginUI() {
+  ctx1.clearRect(0, 0, loginCanvas.width, loginCanvas.height);
+
+  ctx1.font = "16px Arial";
+  ctx1.fillStyle = "#000";
+  ctx1.fillText("Username:", 50, 70);
+  ctx1.strokeRect(150, 50, 200, 30);
+
+  ctx1.fillText("Password:", 50, 130);
+  ctx1.strokeRect(150, 110, 200, 30);
+
+  ctx1.fillStyle = "#007BFF";
+  ctx1.fillRect(150, 180, 100, 40);
+  ctx1.fillStyle = "#FFF";
+  ctx1.fillText("Login", 180, 205);
+
+  ctx1.fillStyle = "#000";
+  ctx1.fillText(username, 155, 70);
+  ctx1.fillText('*'.repeat(password.length), 155, 130);
+
+  ctx1.fillStyle = loginMessage.includes("Success") ? "green" : "red";
+  ctx1.fillText(loginMessage, 50, 360);
+
+  if (activeField === 'username') ctx1.strokeRect(150, 50, 200, 30);
+  if (activeField === 'password') ctx1.strokeRect(150, 110, 200, 30);
+
+  // Draw drag elements if they are in login canvas
+  dragElements.forEach(el => {
+    if (el.canvas === 'login') {
+      ctx1.fillStyle = el.color;
+      ctx1.fillRect(el.x, el.y, el.width, el.height);
+    }
+  });
+}
+
+// Drop Canvas Drawing
+function drawDropUI() {
+  ctx2.clearRect(0, 0, dropCanvas.width, dropCanvas.height);
+
+  dropZones.forEach(zone => {
+    ctx2.fillStyle = 'lightgrey';
+    ctx2.fillRect(zone.x, zone.y, zone.width, zone.height);
+    ctx2.strokeRect(zone.x, zone.y, zone.width, zone.height);
+    ctx2.fillStyle = "#000";
+    ctx2.fillText(zone.label, zone.x + 20, zone.y + 35);
+  });
+
+  dragElements.forEach(el => {
+    if (el.canvas === 'drop') {
+      ctx2.fillStyle = el.color;
+      ctx2.fillRect(el.x, el.y, el.width, el.height);
+    }
+  });
+
+  ctx2.font = "16px Arial";
+  ctx2.fillStyle = dropMessage.includes("Good") ? "green" : "red";
+  ctx2.fillText(dropMessage, 50, 150);
+}
+
+function checkDropCorrectness() {
+  let correctCount = 0;
+  dragElements.forEach(el => {
+    if (el.canvas === 'drop') {
+      dropZones.forEach(zone => {
+        if (el.x + el.width/2 > zone.x && el.x + el.width/2 < zone.x + zone.width &&
+            el.y + el.height/2 > zone.y && el.y + el.height/2 < zone.y + zone.height) {
+          if (el.name === zone.accepts) correctCount++;
+        }
+      });
+    }
+  });
+  dropMessage = correctCount === 2 ? "Good Job!" : "Incorrect Placement!";
+  drawDropUI();
+}
+
+function getMousePos(canvas, evt) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+}
+
+function onMouseDown(evt) {
+  const pos1 = getMousePos(loginCanvas, evt);
+  const pos2 = getMousePos(dropCanvas, evt);
+
+  // Check both canvases to allow cross-canvas dragging
+  dragElements.forEach(el => {
+    if (el.canvas === 'login' &&
+        pos1.x >= el.x && pos1.x <= el.x + el.width &&
+        pos1.y >= el.y && pos1.y <= el.y + el.height) {
+      draggingElement = el;
+      offsetX = pos1.x - el.x;
+      offsetY = pos1.y - el.y;
+      dragging = true;
+    } else if (el.canvas === 'drop' &&
+        pos2.x >= el.x && pos2.x <= el.x + el.width &&
+        pos2.y >= el.y && pos2.y <= el.y + el.height) {
+      draggingElement = el;
+      offsetX = pos2.x - el.x;
+      offsetY = pos2.y - el.y;
+      dragging = true;
+    }
+  });
+}
+
+function onMouseMove(evt) {
+  if (!draggingElement) return;
+
+  const pos1 = getMousePos(loginCanvas, evt);
+  const pos2 = getMousePos(dropCanvas, evt);
+
+  if (draggingElement.canvas === 'login') {
+    draggingElement.x = pos1.x - offsetX;
+    draggingElement.y = pos1.y - offsetY;
+  } else if (draggingElement.canvas === 'drop') {
+    draggingElement.x = pos2.x - offsetX;
+    draggingElement.y = pos2.y - offsetY;
+  }
+
+  drawLoginUI();
+  drawDropUI();
+}
+
+function onMouseUp(evt) {
+  if (!draggingElement) return;
+
+  const pos2 = getMousePos(dropCanvas, evt);
+
+  // If mouse up happens inside drop canvas, move element to drop canvas
+  if (pos2.x >= 0 && pos2.x <= dropCanvas.width &&
+      pos2.y >= 0 && pos2.y <= dropCanvas.height) {
+    draggingElement.canvas = 'drop';
+    draggingElement.x = pos2.x - offsetX;
+    draggingElement.y = pos2.y - offsetY;
+  }
+
+  const pos1 = getMousePos(loginCanvas, evt);
+  if (pos1.x >= 0 && pos1.x <= loginCanvas.width &&
+      pos1.y >= 0 && pos1.y <= loginCanvas.height) {
+    draggingElement.canvas = 'login';
+    draggingElement.x = pos1.x - offsetX;
+    draggingElement.y = pos1.y - offsetY;
+  }
+
+  checkDropCorrectness();
+  draggingElement = null;
+  dragging = false;
+}
+
+loginCanvas.addEventListener('mousedown', onMouseDown);
+dropCanvas.addEventListener('mousedown', onMouseDown);
+
+window.addEventListener('mousemove', onMouseMove);
+window.addEventListener('mouseup', onMouseUp);
+
+loginCanvas.addEventListener('click', function(e) {
+  const pos = getMousePos(loginCanvas, e);
+  if (pos.x >= 150 && pos.x <= 350 && pos.y >= 50 && pos.y <= 80) activeField = 'username';
+  else if (pos.x >= 150 && pos.x <= 350 && pos.y >= 110 && pos.y <= 140) activeField = 'password';
+  else if (pos.x >= 150 && pos.x <= 250 && pos.y >= 180 && pos.y <= 220) {
+    loginMessage = (username === 'Admin' && password === 'admin123') ?
+      "Success: Login Successful!" : "Error: Invalid Credentials!";
+    activeField = null;
+  } else activeField = null;
+  drawLoginUI();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (activeField) {
+    if (e.key === "Backspace") {
+      if (activeField === 'username') username = username.slice(0, -1);
+      else if (activeField === 'password') password = password.slice(0, -1);
+    } else if (e.key.length === 1) {
+      if (activeField === 'username') username += e.key;
+      else if (activeField === 'password') password += e.key;
+    }
+    drawLoginUI();
+  }
+});
+
+drawLoginUI();
+drawDropUI();
+</script>
+</body>
+</html>
